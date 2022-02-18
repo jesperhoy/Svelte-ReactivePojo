@@ -1,25 +1,8 @@
-function MakeStore(obj,prop) {
-    if(obj[prop]===undefined) obj[prop]=null;
-    let dsc=Object.getOwnPropertyDescriptor(obj,prop);
-    if(!dsc.configurable) throw "Object property '" + prop + "' is not configurable";
-    if(dsc.get || dsc.set) throw "Object property '" + prop + "' already has getter or setter";
-    let CurVal=obj[prop];
+function MakeStore(val) {
     let subscribers=[];
-    let SetVal = v => {
-        CurVal=v;
-        let sub2=[]; // copy to new array first, in case changes happen during callbacks
-        subscribers.forEach(sb=>sub2.push(sb)); 
-        sub2.forEach(sb=>sb(v));
-    }
-    delete obj[prop];
-    Object.defineProperty(obj,prop,{
-        enumerable: dsc.enumerable,
-        get: () => CurVal,
-        set: SetVal
-    });
     return {
         subscribe(cb) {
-            cb(CurVal);
+            cb(val);
             if(subscribers.indexOf(cb)>=0) return;
             subscribers.push(cb);
             return ()=>{
@@ -27,17 +10,37 @@ function MakeStore(obj,prop) {
                 if(idx>=0) subscribers.splice(idx,1);
             }
         },
-        set: SetVal
+        set: v => {
+            val=v;
+            let sub2=[]; // copy to new array first, in case changes happen during callbacks
+            subscribers.forEach(cb=>sub2.push(cb)); 
+            sub2.forEach(cb=>cb(v));
+        },
+        get: ()=> val
     }
 }
 
+function ReplaceProp(obj,prop,store) {
+    if(obj[prop]===undefined) obj[prop]=null;
+    let dsc=Object.getOwnPropertyDescriptor(obj,prop);
+    if(!dsc.configurable) throw "Object property '" + prop + "' is not configurable";
+    if(dsc.get || dsc.set) throw "Object property '" + prop + "' already has getter or setter";
+    delete obj[prop];
+    Object.defineProperty(obj,prop,{
+        enumerable: dsc.enumerable,
+        get: store.get,
+        set: store.set
+    });
+}
+
 function RPStore(obj,prop) {
-    let spName=prop+'$RPStore';
-    let store=obj[spName];
+    if(obj.$RPStores===undefined) Object.defineProperty(obj,'$RPStores',{enumerable: false, value: {}});
+    let store=obj.$RPStores[prop];
     if(store) return store;
-    store=MakeStore(obj,prop);
-    Object.defineProperty(obj,spName,{enumerable: false, get: () => store});
+    store=MakeStore(obj[prop]);
+    obj.$RPStores[prop]=store;
+    ReplaceProp(obj,prop,store);
     return store;
 }
 
-export {RPStore};
+export default RPStore;
