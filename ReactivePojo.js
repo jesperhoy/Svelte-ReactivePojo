@@ -1,54 +1,43 @@
-let mp=new WeakMap();
-
 function MakeStore(obj,prop) {
+    if(obj[prop]===undefined) obj[prop]=null;
+    let dsc=Object.getOwnPropertyDescriptor(obj,prop);
+    if(!dsc.configurable) throw "Object property '" + prop + "' is not configurable";
+    if(dsc.get || dsc.set) throw "Object property '" + prop + "' already has getter or setter";
+    let CurVal=obj[prop];
     let subscribers=[];
+    let SetVal = v => {
+        CurVal=v;
+        let sub2=[]; // copy to new array first, in case changes happen during callbacks
+        subscribers.forEach(sb=>sub2.push(sb)); 
+        sub2.forEach(sb=>sb(v));
+    }
+    delete obj[prop];
+    Object.defineProperty(obj,prop,{
+        enumerable: dsc.enumerable,
+        get: () => CurVal,
+        set: SetVal
+    });
     return {
-        subscribe(f) {
-            f(obj[prop]);
-            if(subscribers.indexOf(f)>=0) return;
-            subscribers.push(f);
+        subscribe(cb) {
+            cb(CurVal);
+            if(subscribers.indexOf(cb)>=0) return;
+            subscribers.push(cb);
             return ()=>{
-                let idx=subscribers.indexOf(f);
-                if(idx<0) return;
-                subscribers.splice(idx,1);
+                let idx=subscribers.indexOf(cb);
+                if(idx>=0) subscribers.splice(idx,1);
             }
         },
-        set(v) {
-            obj[prop]=v;
-            let sub2=[];
-            subscribers.forEach(sb=>sub2.push(sb));
-            sub2.forEach(sb=>sb(v));
-        }
+        set: SetVal
     }
-}
-
-function _RPStore(obj,prop,create) {
-    let StoreCol=mp.get(obj);
-    if(StoreCol===undefined) {
-        if(!create) return undefined;
-        StoreCol={};
-        mp.set(obj,StoreCol);
-    }
-    let store=StoreCol[prop];
-    if(store) return store;
-    if(!create) return undefined;
-    store=MakeStore(obj,prop);
-    StoreCol[prop]=store;
-    return store;
 }
 
 function RPStore(obj,prop) {
-    return _RPStore(obj,prop,true);
+    let spName=prop+'$RPStore';
+    let store=obj[spName];
+    if(store) return store;
+    store=MakeStore(obj,prop);
+    Object.defineProperty(obj,spName,{enumerable: false, get: () => store});
+    return store;
 }
 
-function RPSet(obj,prop,value) {
-    let store=_RPStore(obj,prop,false);
-    if(store) {
-        store.set(value);
-    } else {
-        obj[prop]=value;
-    }
-}
-
-
-export {RPStore,RPSet};
+export {RPStore};
