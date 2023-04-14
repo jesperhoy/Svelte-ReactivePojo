@@ -3,8 +3,7 @@ function MakeStore(val) {
     return {
         subscribe(cb) {
             cb(val);
-            if(subscribers.indexOf(cb)>=0) return;
-            subscribers.push(cb);
+            if(subscribers.indexOf(cb)<0) subscribers.push(cb);
             return ()=>{
                 let idx=subscribers.indexOf(cb);
                 if(idx>=0) subscribers.splice(idx,1);
